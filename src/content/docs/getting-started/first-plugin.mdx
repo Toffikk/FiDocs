@@ -54,7 +54,7 @@ We are going to write **Hello**, a small plugin that greets players when they jo
    }
 
    dependencies {
-       compileOnly("fr.fidorial:fidorial-api:0.1.0-SNAPSHOT")
+       compileOnly("fr.fidorial:fidorial-api:26.4-build.+")
    }
 
    java {
@@ -121,7 +121,7 @@ We are going to write **Hello**, a small plugin that greets players when they jo
            // 2. A command: /hello (and /hello:hello).
            ctx.server().commands().register(ctx.meta(), Commands.literal("hello")
                    .executes(context -> {
-                       context.getSource().sender().sendMessage(Component.text("Hello to you!"));
+                       context.getSource().sendMessage(Component.text("Hello to you!"));
                        return Command.SINGLE_SUCCESS;
                    }));
 
@@ -164,6 +164,10 @@ The server calls the three methods of `Plugin` in this order, once each:
 | `onEnable()` | Once every plugin is loaded and worlds are open, in dependency order. | Subscribe to events, register commands. |
 | `onDisable()` | When the server stops, or if the plugin is removed. | Release what the server does not release on its own (see below). |
 
+The server starts accepting connections before `onEnable()` runs, so a player may already be
+online by then. If you set something up for every player on `PlayerJoinEvent`, also handle those
+already in `server().players().online()`.
+
 If `onLoad` or `onEnable` throws, the plugin is disabled and what it registered is removed. The
 server keeps starting without it.
 
@@ -189,7 +193,7 @@ It does **not** remove:
 | Method | Purpose |
 | --- | --- |
 | `meta()` | The content of your `fidorial.json`. |
-| `server()` | The server: players, worlds, commands, permissions, registries… |
+| `server()` | The server: `players()`, `worlds()`, `registries()`, `commands()`, `scheduler()`, `listing()` (MOTD, icon, slots)… |
 | `events()` | The event bus ([guide](/guides/events/)). |
 | `services()` | The service registry ([guide](/guides/services/)). |
 | `logger()` | A logger named `plugin/<id>`, which accepts Adventure `Component`s. |

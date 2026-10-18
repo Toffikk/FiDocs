@@ -54,7 +54,7 @@ On va écrire **Salut**, un petit plugin qui salue les joueurs à leur arrivée 
    }
 
    dependencies {
-       compileOnly("fr.fidorial:fidorial-api:0.1.0-SNAPSHOT")
+       compileOnly("fr.fidorial:fidorial-api:26.4-build.+")
    }
 
    java {
@@ -122,7 +122,7 @@ On va écrire **Salut**, un petit plugin qui salue les joueurs à leur arrivée 
            // 2. Une commande : /salut (et /salut:salut).
            ctx.server().commands().register(ctx.meta(), Commands.literal("salut")
                    .executes(context -> {
-                       context.getSource().sender().sendMessage(Component.text("Salut à toi !"));
+                       context.getSource().sendMessage(Component.text("Salut à toi !"));
                        return Command.SINGLE_SUCCESS;
                    }));
 
@@ -165,6 +165,10 @@ Le serveur appelle les trois méthodes de `Plugin` dans cet ordre, une fois chac
 | `onEnable()` | Une fois tous les plugins chargés et les mondes ouverts, dans l'ordre des dépendances. | S'abonner aux événements, enregistrer les commandes. |
 | `onDisable()` | À l'arrêt du serveur, ou si le plugin est retiré. | Libérer ce que le serveur ne libère pas tout seul (voir ci-dessous). |
 
+Le serveur accepte les connexions avant l'appel à `onEnable()` : un joueur peut donc déjà être
+connecté à ce moment-là. Si tu prépares quelque chose pour chaque joueur sur `PlayerJoinEvent`,
+traite aussi ceux déjà présents dans `server().players().online()`.
+
 Si `onLoad` ou `onEnable` lève une exception, le plugin est désactivé et ce qu'il avait enregistré
 est retiré. Le serveur continue de démarrer sans lui.
 
@@ -190,7 +194,7 @@ Il ne retire **pas** :
 | Méthode | Rôle |
 | --- | --- |
 | `meta()` | Le contenu de ton `fidorial.json`. |
-| `server()` | Le serveur : joueurs, mondes, commandes, permissions, registres… |
+| `server()` | Le serveur : `players()`, `worlds()`, `registries()`, `commands()`, `scheduler()`, `listing()` (MOTD, icône, places)… |
 | `events()` | Le bus d'événements ([guide](/fr/guides/events/)). |
 | `services()` | Le registre des services ([guide](/fr/guides/services/)). |
 | `logger()` | Un logger nommé `plugin/<id>`, qui accepte des `Component` Adventure. |

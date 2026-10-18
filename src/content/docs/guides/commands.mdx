@@ -16,9 +16,9 @@ Build the tree with `Commands.literal(...)` and `Commands.argument(...)`, then r
 ```java
 ctx.server().commands().register(ctx.meta(), Commands.literal("announce")
         .requires(source -> source.sender().hasPermission("commands.announce"))
-        .then(Commands.argument("message", ArgumentTypes.greedyString())
+        .then(Commands.argument("message", StringArgumentType.greedyString())
                 .executes(context -> {
-                    final String message = context.getArgument("message", String.class);
+                    final String message = StringArgumentType.getString(context, "message");
                     // Server is an Audience: sending to the server sends to every player.
                     context.getSource().server().sendMessage(
                             Component.text("[Announcement] " + message, NamedTextColor.YELLOW));
@@ -30,6 +30,8 @@ ctx.server().commands().register(ctx.meta(), Commands.literal("announce")
   `/commands:announce`.
 - The last, optional parameter adds **aliases** (here `/ann`).
 - `executes` returns an integer: `Command.SINGLE_SUCCESS` (1) if the command worked, `0` otherwise.
+- Registering or unregistering a command sends the new tree to online players. You do not need to
+  call `refreshCommands()` yourself.
 
 ## The command source
 
@@ -37,46 +39,128 @@ ctx.server().commands().register(ctx.meta(), Commands.literal("announce")
 
 | Method | Content |
 | --- | --- |
-| `sender()` | Who typed the command: a `Player`, or the console. It is an Adventure `Audience`. |
-| `executor()` | The entity running the command, which may differ from the `sender` (with `/execute as`, for instance). `null` for the console. |
-| `location()` | Where the command is run. |
+| `sender()` | Who typed the command: a `Player`, or the console. It receives feedback and holds permissions. |
+| `executor()` | The entity the command acts as, which may differ from the `sender` (with `/execute as`, for instance). `null` for the console. |
+| `location()` | Where the command runs, or `null` if no world is loaded. |
+| `as(Entity)` | A copy of this source acting as that entity, like `/execute as`. |
+| `at(Location)` | A copy of this source running at that location, like `/execute at`. |
 | `server()` | The server. |
 
-For a players-only command:
+A `CommandSource` is also an Adventure `Audience` that forwards to its sender:
+`context.getSource().sendMessage(...)` does the same as `context.getSource().sender().sendMessage(...)`.
+
+For a command that acts on a player, check the **executor**, not the sender:
 
 ```java
-if (!(context.getSource().sender() instanceof final Player player)) {
-    context.getSource().sender().sendMessage(Component.text("Players only."));
+if (!(context.getSource().executor() instanceof final Player player)) {
+    context.getSource().sendMessage(Component.text("Players only."));
     return 0;
 }
 ```
 
 ## Arguments
 
-`fr.fidorial.command.argument.ArgumentTypes` gathers the argument types the client understands. A
-few of them:
+Arguments come from two places.
+
+**Simple types come from Brigadier itself**, in `com.mojang.brigadier.arguments`:
+
+| Argument | Read with | Type |
+| --- | --- | --- |
+| `StringArgumentType.word()`, `string()`, `greedyString()` | `StringArgumentType.getString(context, name)` | `String` |
+| `IntegerArgumentType.integer()`, `integer(min)`, `integer(min, max)` | `IntegerArgumentType.getInteger(context, name)` | `int` |
+| `LongArgumentType`, `FloatArgumentType`, `DoubleArgumentType` | `getLong`, `getFloat`, `getDouble` | the matching number |
+| `BoolArgumentType.bool()` | `BoolArgumentType.getBool(context, name)` | `boolean` |
+
+**Minecraft types come from `Arguments.arguments()`** (`fr.fidorial.command.argument.Arguments`).
+A static import keeps the tree readable:
+
+```java
+import static fr.fidorial.command.argument.Arguments.arguments;
+
+Commands.argument("target", arguments().player())
+```
+
+A few of them:
 
 | Method | Type you get back |
 | --- | --- |
-| `word()`, `string()`, `greedyString()` | `String` |
-| `integer()`, `integer(min, max)`, `doubleArg()`, `floatArg()`… | the matching number |
-| `bool()` | `Boolean` |
-| `player()`, `players()` | `PlayerSelectorArgumentResolver` (accepts selectors such as `@p`, `@a`…) |
-| `entity()`, `entities()` | `EntitySelectorArgumentResolver` |
-| `blockPosition()` | `BlockPosResolver` (accepts `~ ~1 ~`) |
+| `player()`, `players()` | `PlayerResolver`, `PlayersResolver` (accept `@p`, `@a`…) |
+| `entity()`, `entities()` | `EntityResolver`, `EntitiesResolver` |
+| `playerProfiles()` | `PlayerProfilesResolver` (a selector or a name) |
+| `blockPosition()` | `BlockPositionResolver` (accepts `~ ~1 ~` and `^ ^ ^1`) |
+| `columnPosition()` | `ColumnPositionResolver` |
+| `position()` | `PositionResolver` |
+| `angle()` | `AngleResolver` |
 | `world()` | `World` |
 | `gameMode()` | `GameMode` |
 | `key()` | `Key` |
 | `component()` | `Component` (JSON) |
+| `itemStack()`, `itemPredicate()` | `ItemStack`, `Predicate<ItemStack>` |
+| `integerRange()`, `doubleRange()` | Guava `Range<Integer>`, `Range<Double>` |
+| `time()`, `duration()` | `Integer` (ticks), `Duration` |
+| `resource(registryKey)` | an entry of that registry |
+| `nbtPath()` | `NbtPath` |
 
-**Resolvers** are resolved against the command source:
+`player()`, `players()`, `entity()`, `entities()` and `playerProfiles()` also take a `Predicate`.
+Only matching entities are accepted and suggested:
 
 ```java
-final Player target = context
-        .getArgument("target", PlayerSelectorArgumentResolver.class)
-        .resolve(context.getSource())
-        .getFirst();
+arguments().players(player -> player.gameMode() == GameMode.SURVIVAL)
 ```
+
+Read the other types with `context.getArgument(name, Type.class)`:
+
+```java
+final World world = context.getArgument("world", World.class);
+```
+
+### Resolvers
+
+Selectors and relative or local coordinates depend on who runs the command and where. These
+arguments give back a **resolver**, which is resolved against the source when the command runs.
+
+Each resolver has a static method named after its factory in `Arguments`:
+
+```java
+final Player target = PlayerResolver.player(context, "target");
+final List<Player> targets = PlayersResolver.players(context, "targets");
+final BlockPosition pos = BlockPositionResolver.blockPosition(context, "pos");
+final Location where = PositionResolver.position(context, "position");
+```
+
+They throw a `CommandSyntaxException` when nothing matches or too much matches. Inside `executes`,
+let it through: Brigadier shows the error to the sender.
+
+### Custom arguments
+
+`arguments().map(...)` reuses a native type's grammar and converts what it parses. The client
+highlights the input as the native type. Pass a third argument to replace its suggestions:
+
+```java
+private enum Mode { FAST, SLOW }
+
+private static final DynamicCommandExceptionType UNKNOWN_MODE = new DynamicCommandExceptionType(value ->
+        MessageComponentSerializer.message().serialize(Component.text("Unknown mode: " + value)));
+
+final ArgumentType<Mode> modeArgument = arguments().map(
+        StringArgumentType.word(),
+        (value, reader) -> {
+            try {
+                return Mode.valueOf(value.toUpperCase(Locale.ROOT));
+            } catch (final IllegalArgumentException e) {
+                throw UNKNOWN_MODE.createWithContext(reader, value);
+            }
+        },
+        (context, builder) -> {
+            for (final Mode mode : Mode.values()) {
+                builder.suggest(mode.name().toLowerCase(Locale.ROOT));
+            }
+            return builder.buildFuture();
+        });
+```
+
+`MessageComponentSerializer` (`fr.fidorial.command.serializers`) turns a `Component` into a
+Brigadier `Message`, for error messages and suggestion tooltips.
 
 ## Permissions
 
@@ -112,8 +196,8 @@ the right thread with `execute(...)`:
 
 ```java
 private int up(final CommandContext<CommandSource> context, final int blocks) {
-    if (!(context.getSource().sender() instanceof final Player player)) {
-        context.getSource().sender().sendMessage(Component.text("Players only."));
+    if (!(context.getSource().executor() instanceof final Player player)) {
+        context.getSource().sendMessage(Component.text("Players only."));
         return 0;
     }
     // Commands run on a virtual thread: hop back onto the player's thread.
@@ -128,8 +212,8 @@ private int up(final CommandContext<CommandSource> context, final int blocks) {
 ```java
 ctx.server().commands().register(ctx.meta(), Commands.literal("up")
         .executes(context -> up(context, 10))
-        .then(Commands.argument("blocks", ArgumentTypes.integer(1, 100))
-                .executes(context -> up(context, context.getArgument("blocks", Integer.class)))));
+        .then(Commands.argument("blocks", IntegerArgumentType.integer(1, 100))
+                .executes(context -> up(context, IntegerArgumentType.getInteger(context, "blocks")))));
 ```
 
 More details in [Threads and regions](/guides/threads/).

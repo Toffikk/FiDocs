@@ -57,7 +57,7 @@ clé du monde et le chunk :
 ```java
 ctx.events().subscribe(BlockBreakEvent.class, event -> {
     final World monde = event.world();
-    final BlockPos pos = event.position();
+    final BlockPosition pos = event.position(); // fr.fidorial.math
     // Ici, on est déjà sur le thread de la région qui possède ce bloc.
 
     // Agir sur le même bloc dans 5 secondes (100 ticks) :
@@ -86,7 +86,9 @@ private void chaqueSeconde(final Player joueur) {
         if (!actif || joueur.isRemoved()) {
             return; // le plugin est arrêté, ou le joueur est parti : on ne replanifie pas
         }
-        joueur.sendActionBar(Component.text("Position : " + joueur.location().blockPos()));
+        final Location ici = joueur.location();
+        joueur.sendActionBar(Component.text(
+                "Position : " + ici.blockX() + ", " + ici.blockY() + ", " + ici.blockZ()));
         chaqueSeconde(joueur);
     }, 20);
 }

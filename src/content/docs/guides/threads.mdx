@@ -57,7 +57,7 @@ world key and the chunk:
 ```java
 ctx.events().subscribe(BlockBreakEvent.class, event -> {
     final World world = event.world();
-    final BlockPos pos = event.position();
+    final BlockPosition pos = event.position(); // fr.fidorial.math
     // Here we are already on the thread of the region that owns this block.
 
     // Act on the same block in 5 seconds (100 ticks):
@@ -86,7 +86,9 @@ private void everySecond(final Player player) {
         if (!active || player.isRemoved()) {
             return; // the plugin stopped, or the player left: don't reschedule
         }
-        player.sendActionBar(Component.text("Position: " + player.location().blockPos()));
+        final Location loc = player.location();
+        player.sendActionBar(Component.text(
+                "Position: " + loc.blockX() + ", " + loc.blockY() + ", " + loc.blockZ()));
         everySecond(player);
     }, 20);
 }

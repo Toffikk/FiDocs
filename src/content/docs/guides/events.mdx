@@ -28,7 +28,7 @@ is cancelled, the server does not perform the action:
 
 ```java
 ctx.events().subscribe(BlockBreakEvent.class, EventPriority.HIGH, event -> {
-    if (event.position().y() < 0) {
+    if (event.position().blockY() < 0) {
         event.setCancelled(true);
         event.player().sendMessage(Component.text("Not below layer 0!", NamedTextColor.RED));
     }

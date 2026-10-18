@@ -48,14 +48,11 @@ public final class HurtCommand {
     public LiteralArgumentBuilder<CommandSource> create() {
         return Commands.literal("hurt")
                 .requires(source -> source.sender().hasPermission("services.hurt"))
-                .then(Commands.argument("target", ArgumentTypes.player())
-                        .then(Commands.argument("damage", ArgumentTypes.floatArg(0.5f, 100f))
+                .then(Commands.argument("target", arguments().player())
+                        .then(Commands.argument("damage", FloatArgumentType.floatArg(0.5f, 100f))
                                 .executes(context -> {
-                                    final Player target = context
-                                            .getArgument("target", PlayerSelectorArgumentResolver.class)
-                                            .resolve(context.getSource())
-                                            .getFirst();
-                                    final float damage = context.getArgument("damage", Float.class);
+                                    final Player target = PlayerResolver.player(context, "target");
+                                    final float damage = FloatArgumentType.getFloat(context, "damage");
 
                                     // Ask for the current implementation at the time of the call.
                                     final CombatService combat = services.get(CombatService.class);
@@ -64,7 +61,7 @@ public final class HurtCommand {
                                     // hop onto the thread of the region that owns the target.
                                     target.execute(() -> {
                                         final boolean hit = combat.damage(target, DamageSource.generic(), damage);
-                                        context.getSource().sender().sendMessage(Component.text(
+                                        context.getSource().sendMessage(Component.text(
                                                 hit ? target.name() + " took " + damage + " damage."
                                                     : "The damage was ignored."));
                                     });
@@ -145,7 +142,7 @@ of every vanilla block are generated in `fr.fidorial.registry.keys.BlockTypeKeys
 (no mutable state shared between two calls).
 
 To get a separate world rather than replacing the generator of every world, pass the generator
-directly to `ctx.server().createWorld(Key.key("myplugin", "checkerboard"), new CheckerboardGenerator())`.
+directly to `ctx.server().worlds().create(Key.key("myplugin", "checkerboard"), new CheckerboardGenerator())`.
 
 ### Example 2: wrapping the existing implementation
 
@@ -164,14 +161,9 @@ public final class ForceSurvival implements PlayerDataStorage {
     }
 
     @Override
-    public PlayerData load(final UUID uuid, final PlayerData defaults) throws IOException {
-        final PlayerData data = previous.load(uuid, defaults);
-        return new PlayerData(
-                GameMode.SURVIVAL,
-                data.respawnWorld(),
-                data.respawnLocation(),
-                data.world(),
-                data.location());
+    public PlayerData load(final UUID uuid) throws IOException {
+        final PlayerData data = previous.load(uuid);
+        return new PlayerData(GameMode.SURVIVAL, data.respawnLocation(), data.lastLocation());
     }
 
     @Override
@@ -265,13 +257,14 @@ These services are registered by the server, and `get(...)` does return the serv
 implementation. But if you register your own, **the server will keep using its own** for now:
 
 `combat.CombatService`, `world.weather.WeatherManager`, `world.fluid.FluidManager`,
-`permission.PermissionRegistry`, `command.CommandRegistry`, `entity.OfflinePlayers`,
+`permission.PermissionRegistry`, `command.CommandRegistry`, `entity.OfflinePlayerManager`,
 `moderation.BanManager`, `moderation.WhitelistManager`, `entity.mob.MobRegistry`,
 `world.structure.StructureManager`, `gamerule.GameRules`.
 
-Most of them are also reachable directly from the server: `server().bans()`,
-`server().whitelist()`, `server().permissions()`, `server().commands()`, `server().mobs()`,
-`server().structures()`, `server().gameRules()`… For the weather of a specific world, prefer
+Most of them are also reachable directly from the server: `server().players().bans()`,
+`server().players().whitelist()`, `server().players().offline()`, `server().registries().permissions()`,
+`server().commands()`, `server().registries().mobs()`, `server().worlds().structures()`,
+`server().worlds().gameRules()`… For the weather of a specific world, prefer
 `world.weather()`.
 
 ## What about my own services?

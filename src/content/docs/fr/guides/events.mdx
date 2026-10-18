@@ -28,7 +28,7 @@ Si l'événement est annulé, le serveur ne fait pas l'action :
 
 ```java
 ctx.events().subscribe(BlockBreakEvent.class, EventPriority.HIGH, event -> {
-    if (event.position().y() < 0) {
+    if (event.position().blockY() < 0) {
         event.setCancelled(true);
         event.player().sendMessage(Component.text("Pas sous la couche 0 !", NamedTextColor.RED));
     }
